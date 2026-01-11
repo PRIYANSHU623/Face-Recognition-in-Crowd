@@ -1,0 +1,17 @@
+# YOLOv8 Face Detection Configuration
+
+model:
+  path: 'models/best_after_darkface.pt'
+  confidence_threshold: 0.5
+  iou_threshold: 0.45
+  max_detections: 100
+  
+classes:
+  - 'face'
+  
+image_size: 640
+
+device: 'cuda'  # or 'cpu'
+
+augmentation:
+  enabled: false

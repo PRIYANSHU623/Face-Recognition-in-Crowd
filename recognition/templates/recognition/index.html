@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Recognition System - Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .header-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+        }
+        .card {
+            border: none;
+            box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+            margin-bottom: 1.5rem;
+        }
+        .person-card {
+            transition: transform 0.2s;
+        }
+        .person-card:hover {
+            transform: translateY(-5px);
+        }
+        .person-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 0.25rem 0.25rem 0 0;
+        }
+        .status-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+        }
+        .detection-row {
+            transition: background-color 0.3s;
+        }
+        .detection-row:hover {
+            background-color: #f8f9fa;
+        }
+        .btn-gradient {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+        }
+        .btn-gradient:hover {
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header-section">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1><i class="bi bi-camera-video"></i> Face Recognition System</h1>
+                    <p class="mb-0">Real-time face detection and recognition dashboard</p>
+                </div>
+                <div class="col-md-4 text-end">
+                    {% if system_running %}
+                    <span class="badge bg-success fs-5">
+                        <i class="bi bi-circle-fill"></i> System Active
+                    </span>
+                    {% else %}
+                    <span class="badge bg-secondary fs-5">
+                        <i class="bi bi-circle-fill"></i> System Inactive
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Messages -->
+        {% if messages %}
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        <!-- System Controls -->
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-gear"></i> System Controls</h5>
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <button id="startCamerasBtn" class="btn btn-gradient btn-lg w-100"{% if system_running %} disabled{% endif %}>
+                            <i class="bi bi-play-circle"></i> Start Camera System
+                        </button>
+                    </div>
+                    <div class="col-md-6">
+                        <button id="stopCamerasBtn" class="btn btn-danger btn-lg w-100"{% if not system_running %} disabled{% endif %}>
+                            <i class="bi bi-stop-circle"></i> Stop Camera System
+                        </button>
+                    </div>
+                </div>
+                <div class="mt-3 text-center">
+                    <a href="{% url 'live_view' %}" class="btn btn-info btn-lg"{% if not system_running %} disabled{% endif %}>
+                        <i class="bi bi-broadcast"></i> View Live Cameras
+                    </a>
+                </div>
+                <div id="systemStatus" class="mt-3"></div>
+            </div>
+        </div>
+
+        <!-- Upload New Person -->
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-person-plus"></i> Add Known Person</h5>
+                <form method="post" action="{% url 'upload_person' %}" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="row">
+                        <div class="col-md-5">
+                            <label for="name" class="form-label">Person Name</label>
+                            <input type="text" class="form-control" id="name" name="name" 
+                                   placeholder="e.g., Alok" required>
+                        </div>
+                        <div class="col-md-5">
+                            <label for="image" class="form-label">Upload Photo</label>
+                            <input type="file" class="form-control" id="image" name="image" 
+                                   accept="image/*" required>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-upload"></i> Upload
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Known Persons -->
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-people"></i> Known Persons ({{ persons.count }})</h5>
+                <div class="row mt-3">
+                    {% for person in persons %}
+                    <div class="col-md-3">
+                        <div class="card person-card">
+                            <img src="{{ person.uploaded_image.url }}" class="person-image" alt="{{ person.name }}">
+                            <div class="card-body">
+                                <h6 class="card-title text-center">{{ person.name }}</h6>
+                                <p class="card-text text-muted text-center small">
+                                    Added: {{ person.created_at|date:"M d, Y" }}
+                                </p>
+                                <form method="post" action="{% url 'delete_person' person.id %}" onsubmit="return confirm('Are you sure you want to delete {{ person.name }}?');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-danger btn-sm w-100">
+                                        <i class="bi bi-trash"></i> Delete
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="col-12">
+                        <p class="text-muted text-center">No known persons added yet. Upload a photo above to get started.</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Detections -->
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-clock-history"></i> Recent Detections</h5>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Person</th>
+                                <th>Camera</th>
+                                <th>Time</th>
+                                <th>Confidence</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detectionsTable">
+                            {% for detection in recent_detections %}
+                            <tr class="detection-row">
+                                <td><strong>{{ detection.person_name }}</strong></td>
+                                <td><span class="badge bg-primary">Camera {{ detection.camera_number }}</span></td>
+                                <td>{{ detection.detection_time|date:"M d, Y H:i:s" }}</td>
+                                <td><span class="badge bg-success">{{ detection.confidence_score|floatformat:2 }}</span></td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted">No detections yet</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Start cameras
+        document.getElementById('startCamerasBtn').addEventListener('click', function() {
+            this.disabled = true;
+            this.innerHTML = '<i class="bi bi-hourglass-split"></i> Starting...';
+            
+            fetch('/api/start-cameras/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showStatus('success', data.message);
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showStatus('danger', data.message);
+                    this.disabled = false;
+                    this.innerHTML = '<i class="bi bi-play-circle"></i> Start Camera System';
+                }
+            })
+            .catch(error => {
+                showStatus('danger', 'Error starting cameras: ' + error);
+                this.disabled = false;
+                this.innerHTML = '<i class="bi bi-play-circle"></i> Start Camera System';
+            });
+        });
+
+        // Stop cameras
+        document.getElementById('stopCamerasBtn').addEventListener('click', function() {
+            this.disabled = true;
+            this.innerHTML = '<i class="bi bi-hourglass-split"></i> Stopping...';
+            
+            fetch('/api/stop-cameras/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showStatus('success', data.message);
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showStatus('danger', data.message);
+                    this.disabled = false;
+                    this.innerHTML = '<i class="bi bi-stop-circle"></i> Stop Camera System';
+                }
+            })
+            .catch(error => {
+                showStatus('danger', 'Error stopping cameras: ' + error);
+                this.disabled = false;
+                this.innerHTML = '<i class="bi bi-stop-circle"></i> Stop Camera System';
+            });
+        });
+
+        // Show status message
+        function showStatus(type, message) {
+            const statusDiv = document.getElementById('systemStatus');
+            statusDiv.innerHTML = `
+                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+        }
+
+        // Get CSRF token
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // Auto-refresh detections every 5 seconds if system is running
+        const systemRunning = {{ system_running|yesno:"true,false" }};
+        
+        if (systemRunning) {
+            setInterval(() => {
+                fetch('/api/detections/?limit=10')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            updateDetectionsTable(data.detections);
+                        }
+                    })
+                    .catch(error => console.error('Error fetching detections:', error));
+            }, 5000);
+        }
+
+        function updateDetectionsTable(detections) {
+            const tbody = document.getElementById('detectionsTable');
+            if (detections.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No detections yet</td></tr>';
+                return;
+            }
+            
+            let html = '';
+            detections.forEach(det => {
+                const timestamp = new Date(det.timestamp).toLocaleString();
+                html += `
+                    <tr class="detection-row">
+                        <td><strong>${det.person_name}</strong></td>
+                        <td><span class="badge bg-primary">Camera ${det.camera_number}</span></td>
+                        <td>${timestamp}</td>
+                        <td><span class="badge bg-success">${det.confidence}</span></td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        }
+    </script>
+</body>
+</html>

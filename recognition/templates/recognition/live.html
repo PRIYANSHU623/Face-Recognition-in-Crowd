@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Camera Feeds - Face Recognition</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            background-color: #000;
+            color: #fff;
+        }
+
+        .header-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 1rem 0;
+            margin-bottom: 1rem;
+        }
+
+        .camera-container {
+            position: relative;
+            background: #1a1a1a;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.5);
+        }
+
+        .camera-feed {
+            width: 100%;
+            height: auto;
+            border-radius: 0.5rem;
+            background: #000;
+        }
+
+        .camera-label {
+            position: absolute;
+            top: 1.5rem;
+            left: 1.5rem;
+            background: rgba(102, 126, 234, 0.9);
+            padding: 0.5rem 1rem;
+            border-radius: 0.25rem;
+            font-weight: bold;
+        }
+
+        .detection-panel {
+            background: #1a1a1a;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .detection-alert {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        .no-camera {
+            text-align: center;
+            padding: 3rem;
+            color: #888;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Connection Status -->
+    <div class="connection-status">
+        <span id="wsStatus" class="badge bg-warning">
+            <i class="bi bi-wifi-off"></i> Connecting...
+        </span>
+    </div>
+
+    <!-- Header -->
+    <div class="header-section">
+        <div class="container-fluid">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h3><i class="bi bi-broadcast"></i> Live Camera Feeds</h3>
+                </div>
+                <div class="col-md-4 text-end">
+                    <a href="{% url 'index' %}" class="btn btn-light">
+                        <i class="bi bi-arrow-left"></i> Back to Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Camera Feeds -->
+            <div class="col-md-9">
+                <div id="cameraFeeds" class="row">
+                    <div class="col-12 no-camera">
+                        <i class="bi bi-camera-video-off" style="font-size: 3rem;"></i>
+                        <p class="mt-3">Waiting for camera feeds...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detection Alerts -->
+            <div class="col-md-3">
+                <div class="detection-panel">
+                    <h5 class="mb-3">
+                        <i class="bi bi-bell"></i> Live Detections
+                    </h5>
+                    <div id="detectionAlerts">
+                        <p class="text-muted text-center">No detections yet</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // WebSocket connection
+        let ws = null;
+        let reconnectInterval = null;
+        const cameraFeeds = new Map(); // Store camera feed elements
+        const detections = []; // Store recent detections
+        const maxDetections = 20;
+
+        function connectWebSocket() {
+            // Determine WebSocket protocol (ws or wss)
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/recognition/`;
+
+            console.log('Connecting to WebSocket:', wsUrl);
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = function () {
+                console.log('WebSocket connected');
+                updateConnectionStatus('connected');
+                if (reconnectInterval) {
+                    clearInterval(reconnectInterval);
+                    reconnectInterval = null;
+                }
+            };
+
+            ws.onmessage = function (event) {
+                const data = JSON.parse(event.data);
+
+                if (data.type === 'frame') {
+                    updateCameraFeed(data.camera_number, data.frame);
+                } else if (data.type === 'detection') {
+                    handleDetection(data);
+                } else if (data.type === 'camera_status') {
+                    updateCameraStatus(data.cameras);
+                }
+            };
+
+            ws.onerror = function (error) {
+                console.error('WebSocket error:', error);
+                updateConnectionStatus('error');
+            };
+
+            ws.onclose = function () {
+                console.log('WebSocket disconnected');
+                updateConnectionStatus('disconnected');
+
+                // Attempt to reconnect every 3 seconds
+                if (!reconnectInterval) {
+                    reconnectInterval = setInterval(() => {
+                        console.log('Attempting to reconnect...');
+                        connectWebSocket();
+                    }, 3000);
+                }
+            };
+        }
+
+        function updateConnectionStatus(status) {
+            const statusElement = document.getElementById('wsStatus');
+
+            if (status === 'connected') {
+                statusElement.className = 'badge bg-success';
+                statusElement.innerHTML = '<i class="bi bi-wifi"></i> Connected';
+            } else if (status === 'disconnected') {
+                statusElement.className = 'badge bg-danger';
+                statusElement.innerHTML = '<i class="bi bi-wifi-off"></i> Disconnected';
+            } else if (status === 'error') {
+                statusElement.className = 'badge bg-warning';
+                statusElement.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Error';
+            }
+        }
+
+        function updateCameraFeed(cameraNumber, frameData) {
+            // Create camera feed element if it doesn't exist
+            if (!cameraFeeds.has(cameraNumber)) {
+                createCameraFeedElement(cameraNumber);
+            }
+
+            // Update the image
+            const imgElement = document.getElementById(`camera-${cameraNumber}`);
+            if (imgElement) {
+                imgElement.src = `data:image/jpeg;base64,${frameData}`;
+            }
+        }
+
+        function createCameraFeedElement(cameraNumber) {
+            const feedsContainer = document.getElementById('cameraFeeds');
+
+            // Remove "no camera" message if present
+            const noCamera = feedsContainer.querySelector('.no-camera');
+            if (noCamera) {
+                noCamera.remove();
+            }
+
+            // Create camera feed HTML
+            const cameraDiv = document.createElement('div');
+            cameraDiv.className = 'col-md-6 col-lg-4';
+            cameraDiv.id = `camera-container-${cameraNumber}`;
+            cameraDiv.innerHTML = `
+                <div class="camera-container">
+                    <div class="camera-label">
+                        <i class="bi bi-camera-video"></i> Camera ${cameraNumber}
+                    </div>
+                    <img id="camera-${cameraNumber}" class="camera-feed" 
+                         src="" alt="Camera ${cameraNumber}">
+                </div>
+            `;
+
+            feedsContainer.appendChild(cameraDiv);
+            cameraFeeds.set(cameraNumber, cameraDiv);
+        }
+
+        function handleDetection(data) {
+            // Add to detections array
+            detections.unshift(data);
+
+            // Keep only recent detections
+            if (detections.length > maxDetections) {
+                detections.pop();
+            }
+
+            // Update detection alerts
+            updateDetectionAlerts();
+
+            // Show browser notification if permitted
+            showNotification(data);
+
+            // Play sound alert
+            playAlertSound();
+        }
+
+        function updateDetectionAlerts() {
+            const alertsContainer = document.getElementById('detectionAlerts');
+
+            if (detections.length === 0) {
+                alertsContainer.innerHTML = '<p class="text-muted text-center">No detections yet</p>';
+                return;
+            }
+
+            let html = '';
+            detections.forEach(det => {
+                const timestamp = new Date(det.timestamp).toLocaleString();
+                html += `
+                    <div class="detection-alert">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="mb-1">
+                                    <i class="bi bi-person-check"></i> ${det.person_name}
+                                </h6>
+                                <small>Camera ${det.camera_number}</small><br>
+                                <small>${timestamp}</small><br>
+                                <small>Confidence: ${det.confidence}</small>
+                            </div>
+                            <span class="badge bg-success">
+                                <i class="bi bi-check-circle"></i>
+                            </span>
+                        </div>
+                    </div>
+                `;
+            });
+
+            alertsContainer.innerHTML = html;
+        }
+
+        function showNotification(data) {
+            // Check if notifications are supported and permitted
+            if (!("Notification" in window)) {
+                return;
+            }
+
+            if (Notification.permission === "granted") {
+                new Notification("Person Detected!", {
+                    body: `${data.person_name} detected on Camera ${data.camera_number}`,
+                    icon: '/static/favicon.ico',
+                    tag: `detection-${data.detection_id}`
+                });
+            } else if (Notification.permission !== "denied") {
+                Notification.requestPermission().then(permission => {
+                    if (permission === "granted") {
+                        showNotification(data);
+                    }
+                });
+            }
+        }
+
+        function playAlertSound() {
+            // Create a simple beep sound using Web Audio API
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                oscillator.frequency.value = 800;
+                oscillator.type = 'sine';
+
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+            } catch (e) {
+                console.log('Could not play sound:', e);
+            }
+        }
+
+        function updateCameraStatus(cameras) {
+            console.log('Active cameras:', cameras);
+        }
+
+        // Initialize WebSocket connection
+        connectWebSocket();
+
+        // Request notification permission on page load
+        if ("Notification" in window && Notification.permission === "default") {
+            Notification.requestPermission();
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function () {
+            if (ws) {
+                ws.close();
+            }
+        });
+    </script>
+</body>
+
+</html>
