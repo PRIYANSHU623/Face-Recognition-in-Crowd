@@ -25,3 +25,40 @@ If the similarity score exceeds a predefined threshold, the system identifies th
 ## Model Output
 During testing on a group image containing Dhoni, Rohit, and Sachin, the system accurately detects multiple faces, generates bounding boxes for each individual, and assigns confidence scores to each detection, demonstrating effective multi-face recognition in crowded scenarios.
 <img width="1024" height="576" alt="Multi-Suspect Detection (Gray + RGB Boxes)_screenshot_12 11 2025" src="https://github.com/user-attachments/assets/20dfb759-9859-46a4-acad-bcd1300a135d" />
+
+
+
+##  How to Run the Project
+
+### 🔧 Prerequisites
+- Python (>= 3.8)
+- pip
+- Git
+- Virtual environment (recommended)
+
+---
+
+### ▶️ Run All Commands
+
+```bash
+git clone https://github.com/your-username/Face-Recognition-in-Crowd.git
+cd Face-Recognition-in-Crowd
+
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment
+# Linux / Mac
+source venv/bin/activate
+# Windows
+venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Setup database
+python manage.py makemigrations
+python manage.py migrate
+
+# Run server
+python manage.py runserver
