@@ -19,6 +19,8 @@ If the similarity score exceeds a predefined threshold, the system identifies th
 ## Poster with Flow Digram
 
 [Poster.pdf](https://github.com/user-attachments/files/26599833/DesignPoster.pdf)
+<img width="1139" height="125" alt="image" src="https://github.com/user-attachments/assets/a81233f7-36f9-4309-9e31-0c8dbe4c44db" />
+
 
 ## Model Output
 During testing on a group image containing Dhoni, Rohit, and Sachin, the system accurately detects multiple faces, generates bounding boxes for each individual, and assigns confidence scores to each detection, demonstrating effective multi-face recognition in crowded scenarios.
