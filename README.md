@@ -30,7 +30,7 @@ During testing on a group image containing Dhoni, Rohit, and Sachin, the system 
 
 ##  How to Run the Project
 
-### 🔧 Prerequisites
+###  Prerequisites
 - Python (>= 3.8)
 - pip
 - Git
@@ -38,7 +38,7 @@ During testing on a group image containing Dhoni, Rohit, and Sachin, the system 
 
 ---
 
-### ▶️ Run All Commands
+###  Run All Commands
 
 ```bash
 git clone https://github.com/your-username/Face-Recognition-in-Crowd.git
