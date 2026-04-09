@@ -19,7 +19,7 @@ If the similarity score exceeds a predefined threshold, the system identifies th
 ## Poster with Flow Digram
 
 [Poster.pdf](https://github.com/user-attachments/files/26599833/DesignPoster.pdf)
-<img width="1139" height="125" alt="image" src="https://github.com/user-attachments/assets/a81233f7-36f9-4309-9e31-0c8dbe4c44db" />
+<img width="879" height="680" alt="image" src="https://github.com/user-attachments/assets/0bfe2971-0a1e-41cb-b89a-e19a0564d5b2" />
 
 
 ## Model Output
